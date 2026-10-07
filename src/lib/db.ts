@@ -1,7 +1,5 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
 type MongooseCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -16,6 +14,11 @@ const cache: MongooseCache = globalForMongoose.mongooseCache ?? { conn: null, pr
 globalForMongoose.mongooseCache = cache;
 
 export async function connectToDatabase(): Promise<typeof mongoose> {
+  // Read lazily, not at module load time: scripts that call dotenv's config()
+  // after their other imports (e.g. scripts/seed.ts) would otherwise capture
+  // `undefined` here, since import statements are hoisted above other
+  // top-level code by the TS/esbuild CJS transform.
+  const MONGODB_URI = process.env.MONGODB_URI;
   if (!MONGODB_URI) {
     throw new Error("MONGODB_URI is not set");
   }
