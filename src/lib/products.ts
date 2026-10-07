@@ -59,3 +59,45 @@ export async function getProductBySlug(slug: string): Promise<PlainProduct | nul
   const doc = (await Product.findOne({ slug, isActive: true }).lean()) as unknown as ProductLeanDoc | null;
   return doc ? toPlainProduct(doc) : null;
 }
+
+export interface CheckoutBumpOption {
+  id: string;
+  title: string;
+  pricePaise: number;
+}
+
+export interface CheckoutProduct {
+  id: string;
+  slug: string;
+  title: string;
+  pricePaise: number;
+  bumps: CheckoutBumpOption[];
+}
+
+interface ProductBumpLeanDoc {
+  bumpProductIds: Types.ObjectId[];
+}
+
+export async function getCheckoutProductBySlug(slug: string): Promise<CheckoutProduct | null> {
+  await connectToDatabase();
+
+  const doc = (await Product.findOne({ slug, isActive: true })
+    .select("_id slug title pricePaise bumpProductIds")
+    .lean()) as unknown as (ProductLeanDoc & ProductBumpLeanDoc) | null;
+  if (!doc) return null;
+
+  const bumpIds = doc.bumpProductIds ?? [];
+  const bumpDocs = bumpIds.length
+    ? ((await Product.find({ _id: { $in: bumpIds }, isActive: true })
+        .select("_id title pricePaise")
+        .lean()) as unknown as { _id: Types.ObjectId; title: string; pricePaise: number }[])
+    : [];
+
+  return {
+    id: doc._id.toString(),
+    slug: doc.slug,
+    title: doc.title,
+    pricePaise: doc.pricePaise,
+    bumps: bumpDocs.map((b) => ({ id: b._id.toString(), title: b.title, pricePaise: b.pricePaise })),
+  };
+}
